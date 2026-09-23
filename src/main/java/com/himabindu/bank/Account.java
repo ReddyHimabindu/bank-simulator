@@ -21,13 +21,15 @@ public abstract class Account {
         balance = balance.add(amount);
     }
 
-    public void withdraw(BigDecimal amount) {
+    public void withdraw(BigDecimal amount) throws InsufficientFundsException {
         if (amount.signum() <= 0) {
             throw new IllegalArgumentException("Withdrawal amount must be positive");
         }
         BigDecimal total = amount.add(calculateFee(amount));
         if (balance.compareTo(total) < 0) {
-            throw new IllegalStateException("Insufficient balance");
+            throw new InsufficientFundsException(
+                    "Cannot withdraw " + amount + ", balance is only " + balance
+            );
         }
         balance = balance.subtract(total);
     }
