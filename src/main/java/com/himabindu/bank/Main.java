@@ -1,107 +1,108 @@
 package com.himabindu.bank;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Iterator;
+import java.util.*;
 import java.math.BigDecimal;
 
 public class Main {
     public static void main(String[] args) {
+        System.out.println("=== Collections.synchronizedList ===\n");
 
-        // ==================== ArrayList Demo ====================
+        // Regular ArrayList: NOT thread-safe
+        System.out.println("--- Regular ArrayList (NOT thread-safe) ---");
+        List<Account> regularList = new ArrayList<>();
+        regularList.add(new SavingAccount("SA1", "Alice", new BigDecimal("1000")));
+        regularList.add(new CurrentAccount("CA1", "Bob", new BigDecimal("5000")));
+        System.out.println("Regular list size: " + regularList.size());
+        System.out.println();
 
-        // STEP 1: Create an ArrayList to store accounts
-        List<Account> accounts = new ArrayList<>();
-        // Why ArrayList? We're storing a variable number of accounts that we'll access by index
-        // Benefits: O(1) random access, easy iteration, safe removal with Iterator
+        // ✅ CORRECT: Thread-safe list using Collections.synchronizedList()
+        System.out.println("--- Collections.synchronizedList (thread-safe) ---");
+        List<Account> sharedAccounts = Collections.synchronizedList(new ArrayList<>());
+        sharedAccounts.add(new SavingAccount("SA1", "Alice", new BigDecimal("1000")));
+        sharedAccounts.add(new CurrentAccount("CA1", "Bob", new BigDecimal("5000")));
+        sharedAccounts.add(new SavingAccount("SA2", "Charlie", new BigDecimal("750")));
+        System.out.println("Synchronized list size: " + sharedAccounts.size());
+        System.out.println("Individual operations (add/get/remove) are synchronized internally");
+        System.out.println();
 
-        // STEP 2: Add accounts (demonstrates amortized O(1) add)
-        System.out.println("=== Adding Accounts ===");
-        accounts.add(new SavingAccount("SA1", "Himabindu", new BigDecimal("1000.00")));
-        accounts.add(new CurrentAccount("CA1", "Raj", new BigDecimal("5000.00")));
-        accounts.add(new SavingAccount("SA2", "Priya", new BigDecimal("2500.00")));
-        // Internally: Each add() is O(1) amortized
-        //   - Adds 1-10: Quick, no resize needed
-        //   - Add 11: ArrayList realizes capacity 10 is full
-        //             Creates new array of size 15 (1.5× growth)
-        //             Copies all 10 elements to new array
-        //             Adds the 11th element
-        //             From now on, 4 more adds can happen before next resize
-
-        // STEP 3: Print all accounts (iteration with for-each)
-        System.out.println("\n=== All Accounts (For-Each Iteration) ===");
-        for (Account account : accounts) {
-            System.out.println(account);
+        // ❌ WRONG: Iterating over synchronized list without explicit synchronization
+        System.out.println("--- WRONG: Iterating without synchronization ---");
+        try {
+            for (Account acc : sharedAccounts) {
+                System.out.println("  " + acc.getAccountId());
+                // Another thread might modify the list here → ConcurrentModificationException
+            }
+            System.out.println("✓ No exception (but not guaranteed in multithreaded code)");
+        } catch (ConcurrentModificationException e) {
+            System.out.println("✗ ConcurrentModificationException during iteration");
         }
-        // Why for-each? Creates an Iterator internally, safe, easy to read
+        System.out.println();
 
-        // STEP 4: Access by index (demonstrates O(1) random access)
-        System.out.println("\n=== Access by Index ===");
-        System.out.println("First account (index 0): " + accounts.get(0));
-        // Why this matters? LinkedList would be O(n) for this operation
-        // ArrayList is O(1) because it directly accesses the array at index 0
-
-        // STEP 5: Get size
-        System.out.println("Total accounts: " + accounts.size());
-        // size() is O(1) — ArrayList stores a counter that updates on add/remove
-
-        // STEP 6: Check if an account exists
-        System.out.println("\n=== Searching for Account ===");
-        Account searchAccount = new SavingAccount("SA1", "Himabindu", new BigDecimal("1000.00"));
-        if (accounts.contains(searchAccount)) {
-            System.out.println("Account SA1 found in the list");
-        }
-        // contains() is O(n) — it searches linearly through the array
-
-        // STEP 7: IMPORTANT — Safely remove accounts with zero balance using Iterator
-        System.out.println("\n=== Removing Zero-Balance Accounts ===");
-        // Create some zero-balance accounts first to demonstrate
-        accounts.add(new SavingAccount("SA3", "Zero", new BigDecimal("0.00")));
-        accounts.add(new CurrentAccount("CA2", "Empty", new BigDecimal("0.00")));
-
-        // Use Iterator for safe removal
-        Iterator<Account> it = accounts.iterator();
-        while (it.hasNext()) {
-            Account acc = it.next();
-            if (acc.getBalance().signum() == 0) {  // signum() returns 0 if balance is 0
-                System.out.println("Removing: " + acc.getAccountId() + " (balance: " + acc.getBalance() + ")");
-                it.remove();  // ✅ SAFE — Iterator knows about the removal
+        // ✅ CORRECT: Iterate with explicit synchronization
+        System.out.println("--- CORRECT: Iterating with synchronization ---");
+        synchronized (sharedAccounts) {  // Lock the entire list
+            for (Account acc : sharedAccounts) {
+                System.out.println("  " + acc.getAccountId());
             }
         }
+        // During this synchronized block, no other thread can modify the list
+        System.out.println("✓ Safe: No other thread can modify during iteration");
+        System.out.println();
 
-        // Why Iterator instead of regular for-loop?
-        // ❌ DON'T DO THIS:
-        //   for (int i = 0; i < accounts.size(); i++) {
-        //       if (accounts.get(i).getBalance().signum() == 0) {
-        //           accounts.remove(i);  // BUG! Shifts elements, skips next element
-        //       }
-        //   }
-        //
-        // ✅ DO THIS:
-        //   for (Iterator<Account> it = accounts.iterator(); it.hasNext();) {
-        //       Account acc = it.next();
-        //       if (acc.getBalance().signum() == 0) {
-        //           it.remove();  // Safe removal — Iterator handles shift internally
-        //       }
-        //   }
+        // Demonstrate the cost: mutual exclusion
+        System.out.println("--- Performance Cost: Mutual Exclusion ---");
+        List<Integer> syncList = Collections.synchronizedList(new ArrayList<>());
 
-        System.out.println("Accounts after removal:");
-        for (Account account : accounts) {
-            System.out.println("  - " + account.getAccountId() + ": ₹" + account.getBalance());
+        long start = System.nanoTime();
+        for (int i = 0; i < 100000; i++) {
+            syncList.add(i);  // Each add() acquires a lock
         }
+        long syncTime = System.nanoTime() - start;
 
-        // STEP 8: Insert account at specific position (demonstrates O(n) insert)
-        System.out.println("\n=== Inserting Account at Position ===");
-        accounts.add(1, new SavingAccount("SA_NEW", "NewAccount", new BigDecimal("750.00")));
-        // Internally: ArrayList shifts all elements from index 1 onward RIGHT by 1
-        //   [Account0, Account1, Account2, ...]
-        //   becomes
-        //   [Account0, NEW_ACCOUNT, Account1, Account2, ...]
-        // Cost: O(n) where n = elements after insertion point
-        // This is why ArrayList is bad for frequent head insertions!
-        System.out.println("List after inserting at index 1:");
-        for (int i = 0; i < accounts.size(); i++) {
-            System.out.println(i + ": " + accounts.get(i).getAccountId());
+        List<Integer> unsyncList = new ArrayList<>();
+        start = System.nanoTime();
+        for (int i = 0; i < 100000; i++) {
+            unsyncList.add(i);  // No lock overhead
         }
+        long unsyncTime = System.nanoTime() - start;
+
+        System.out.println("Synchronized 100K adds: " + syncTime + " ns");
+        System.out.println("Unsynchronized 100K adds: " + unsyncTime + " ns");
+        System.out.println("Synchronized is 2-5x slower due to locking overhead");
+        System.out.println();
+
+        // ❌ WRONG: Check-then-act is NOT atomic
+        System.out.println("--- WRONG: Non-atomic check-then-act ---");
+        List<String> ids = Collections.synchronizedList(new ArrayList<>());
+        ids.add("SA1");
+        ids.add("CA1");
+
+        // This is NOT atomic: race condition can occur between contains() and add()
+        String id = "SA1";
+        if (!ids.contains(id)) {  // Step 1: Check (no lock)
+            ids.add(id);           // Step 2: Add (acquire lock)
+            // Another thread might have added "SA1" between steps 1 and 2!
+        }
+        System.out.println("Race condition possible: Thread A checks, Thread B adds, Thread A adds duplicate");
+        System.out.println();
+
+        // ✅ CORRECT: Synchronize the entire check-then-act
+        System.out.println("--- CORRECT: Atomic check-then-act ---");
+        synchronized (ids) {  // Hold lock for entire operation
+            String checkId = "CA1";
+            if (!ids.contains(checkId)) {
+                ids.add(checkId);
+            }
+        }
+        System.out.println("✓ Safe: Lock held for entire check-then-add sequence");
+        System.out.println();
+
+        // When to use Collections.synchronizedList()
+        System.out.println("--- When to Use ---");
+        System.out.println("✅ USE: Multiple threads accessing ArrayList");
+        System.out.println("✅ USE: Occasional concurrent modifications");
+        System.out.println("❌ AVOID: Read-heavy workloads (use CopyOnWriteArrayList instead)");
+        System.out.println("❌ AVOID: Single-threaded code (overhead not worth it)");
+        System.out.println("❌ AVOID: When check-then-act atomicity is critical");
     }
 }
